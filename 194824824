@@ -638,9 +638,12 @@ end
 
 local ConfigManagerPopup = nil
 local function CreateConfigManagerPopup()
-    if ConfigManagerPopup then return ConfigManagerPopup end
+    if ConfigManagerPopup and ConfigManagerPopup.Parent then 
+        return ConfigManagerPopup 
+    end
 
     local configFrame = Instance.new("Frame")
+    configFrame.Name = "ConfigManagerPopup"
     configFrame.Size = UDim2.new(0, 260, 0, 280)
     configFrame.Position = UDim2.new(0.5, -130, 0.5, -140)
     configFrame.BackgroundColor3 = THEME.Background
