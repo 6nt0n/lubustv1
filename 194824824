@@ -636,10 +636,10 @@ local function CreateColorPickerPopup(parentBtn, defaultColor, onColorChanged)
     return pickerFrame
 end
 
-local ConfigManagerPopup = nil
+local ConfigManagerPopupObj = nil
 local function CreateConfigManagerPopup()
-    if ConfigManagerPopup and ConfigManagerPopup.Parent then 
-        return ConfigManagerPopup 
+    if ConfigManagerPopupObj and ConfigManagerPopupObj.Frame and ConfigManagerPopupObj.Frame.Parent then 
+        return ConfigManagerPopupObj 
     end
 
     local configFrame = Instance.new("Frame")
@@ -858,15 +858,18 @@ local function CreateConfigManagerPopup()
         end
     end)
 
-    function configFrame:ToggleVisible()
+    local PopupObj = {}
+    PopupObj.Frame = configFrame
+
+    function PopupObj:ToggleVisible()
         configFrame.Visible = not configFrame.Visible
         if configFrame.Visible then
             refreshList()
         end
     end
 
-    ConfigManagerPopup = configFrame
-    return configFrame
+    ConfigManagerPopupObj = PopupObj
+    return PopupObj
 end
 
 function Library:CreateCategory(categoryName, customPosition)
