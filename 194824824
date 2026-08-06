@@ -52,6 +52,7 @@ local Library = {
     KeybindListInstance = nil,
     ToggleKey = Enum.KeyCode.RightControl,
     ConfigFolder = "SlugwareConfigs",
+    ActiveNotifications = {},
     ThemeObjects = {
         Accents = {},
         Gradients = {},
@@ -145,7 +146,7 @@ local function AddSquareBorder(instance, color, thickness)
     return stroke
 end
 
-local function MakeDraggable(frame, handle)
+local function MakeDraggable(frame, handle, onDragged)
     local dragging, dragStart, startPos
     handle = handle or frame
 
@@ -164,15 +165,15 @@ local function MakeDraggable(frame, handle)
                 startPos.X.Scale or 0, (startPos.X.Offset or 0) + (delta.X or 0),
                 startPos.Y.Scale or 0, (startPos.Y.Offset or 0) + (delta.Y or 0)
             )
-            CreateTween(frame, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                Position = targetPos
-            }):Play()
+            frame.Position = targetPos
+            if onDragged then onDragged(targetPos) end
         end
     end)
 
     UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = false
+            if onDragged then onDragged(frame.Position) end
         end
     end)
 end
@@ -181,12 +182,25 @@ function Library:SaveConfig(name)
     if not writefile then return end
     name = name or "default"
     local success, encoded = pcall(function()
-        local saveData = {}
+        local saveData = {
+            Flags = {},
+            CategoryPositions = {}
+        }
         for flag, val in pairs(Library.Flags) do
             if typeof(val) == "Color3" then
-                saveData[flag] = {type = "Color3", r = val.R or 0, g = val.G or 0, b = val.B or 0}
+                saveData.Flags[flag] = {type = "Color3", r = val.R or 0, g = val.G or 0, b = val.B or 0}
             elseif type(val) ~= "function" and type(val) ~= "userdata" then
-                saveData[flag] = val
+                saveData.Flags[flag] = val
+            end
+        end
+        for _, cat in ipairs(Library.Categories) do
+            if cat.Name and cat.CurrentPosition then
+                saveData.CategoryPositions[cat.Name] = {
+                    xs = cat.CurrentPosition.X.Scale,
+                    xo = cat.CurrentPosition.X.Offset,
+                    ys = cat.CurrentPosition.Y.Scale,
+                    yo = cat.CurrentPosition.Y.Offset
+                }
             end
         end
         return HttpService:JSONEncode(saveData)
@@ -206,11 +220,24 @@ function Library:LoadConfig(name)
             return HttpService:JSONDecode(readfile(filePath))
         end)
         if success and type(decoded) == "table" then
-            for flag, val in pairs(decoded) do
+            local flagsData = decoded.Flags or decoded
+            for flag, val in pairs(flagsData) do
                 if type(val) == "table" and val.type == "Color3" then
                     Library.Flags[flag] = Color3.new(val.r or 1, val.g or 1, val.b or 1)
                 else
                     Library.Flags[flag] = val
+                end
+            end
+            if decoded.CategoryPositions then
+                for _, cat in ipairs(Library.Categories) do
+                    local posData = decoded.CategoryPositions[cat.Name]
+                    if posData then
+                        local newPos = UDim2.new(posData.xs or 0, posData.xo or 0, posData.ys or 0, posData.yo or 0)
+                        cat.CurrentPosition = newPos
+                        if cat.Frame then
+                            cat.Frame.Position = newPos
+                        end
+                    end
                 end
             end
             Library:Notification("Config", "Loaded config: " .. name, 2)
@@ -277,14 +304,21 @@ searchBar:GetPropertyChangedSignal("Text"):Connect(function()
     end
 end)
 
-local lastNotifTime = 0
 function Library:Notification(title, msg, duration)
-    if tick() - lastNotifTime < 0.1 then return end
-    lastNotifTime = tick()
-
     local titleStr = type(title) == "table" and (title.Title or title.Name or "Notice") or tostring(title or "Notice")
     local msgStr = type(title) == "table" and (title.Description or title.Text or "") or tostring(msg or "")
     local displayStr = msgStr ~= "" and (titleStr .. " | " .. msgStr) or titleStr
+    duration = duration or 3
+
+    for _, notif in ipairs(Library.ActiveNotifications) do
+        if notif.displayStr == displayStr then
+            notif.count = notif.count + 1
+            notif.timer = duration
+            local countText = notif.count > 1 and ' <font color="rgb(180, 180, 180)">(x' .. notif.count .. ')</font>' or ''
+            notif.label.Text = '[<font color="rgb(164, 35, 228)">Slugware</font>] ' .. notif.displayStr .. countText
+            return
+        end
+    end
 
     local notifLabel = Instance.new("TextLabel")
     notifLabel.Size = UDim2.new(0, 400, 0, 30)
@@ -301,20 +335,55 @@ function Library:Notification(title, msg, duration)
     notifLabel.ZIndex = 300
     notifLabel.Parent = ScreenGui
 
+    local notifData = {
+        label = notifLabel,
+        displayStr = displayStr,
+        count = 1,
+        timer = duration
+    }
+
+    table.insert(Library.ActiveNotifications, notifData)
+
+    local function updatePositions()
+        local total = #Library.ActiveNotifications
+        for i, n in ipairs(Library.ActiveNotifications) do
+            local indexFromBottom = total - i + 1
+            local targetYPos = 0.78 - ((indexFromBottom - 1) * 0.042)
+            CreateTween(n.label, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Position = UDim2.new(0.5, -200, targetYPos, 0)
+            }):Play()
+        end
+    end
+
+    updatePositions()
+
     CreateTween(notifLabel, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
         TextTransparency = 0,
         TextStrokeTransparency = 0.5,
         Position = UDim2.new(0.5, -200, 0.78, 0)
     }):Play()
 
-    task.delay(duration or 3, function()
+    task.spawn(function()
+        while notifData.timer > 0 do
+            task.wait(0.1)
+            notifData.timer = notifData.timer - 0.1
+        end
+
+        for idx, n in ipairs(Library.ActiveNotifications) do
+            if n == notifData then
+                table.remove(Library.ActiveNotifications, idx)
+                break
+            end
+        end
+
         local fade = CreateTween(notifLabel, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
             TextTransparency = 1,
             TextStrokeTransparency = 1,
-            Position = UDim2.new(0.5, -200, 0.75, 0)
+            Position = UDim2.new(0.5, -200, notifLabel.Position.Y.Scale - 0.03, 0)
         })
         fade:Play()
         fade.Completed:Connect(function() pcall(function() notifLabel:Destroy() end) end)
+        updatePositions()
     end)
 end
 function Library:Notify(...) self:Notification(...) end
@@ -650,6 +719,7 @@ local function CreateConfigManagerPopup()
     configFrame.BorderSizePixel = 0
     configFrame.ZIndex = 200
     configFrame.Visible = false
+    configFrame.BackgroundTransparency = 1
     configFrame.Parent = ScreenGui
 
     AddSquareBorder(configFrame, THEME.Outline)
@@ -687,7 +757,7 @@ local function CreateConfigManagerPopup()
     closeBtn.Parent = configFrame
 
     closeBtn.MouseButton1Click:Connect(function()
-        configFrame.Visible = false
+        PopupObj:ToggleVisible()
     end)
 
     local textBox = Instance.new("TextBox")
@@ -858,13 +928,31 @@ local function CreateConfigManagerPopup()
         end
     end)
 
-    local PopupObj = {}
+    PopupObj = {}
     PopupObj.Frame = configFrame
+    PopupObj.IsOpen = false
 
     function PopupObj:ToggleVisible()
-        configFrame.Visible = not configFrame.Visible
-        if configFrame.Visible then
+        PopupObj.IsOpen = not PopupObj.IsOpen
+        if PopupObj.IsOpen then
+            configFrame.Visible = true
+            configFrame.Position = UDim2.new(0.5, -130, 0.5, -150)
+            CreateTween(configFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Position = UDim2.new(0.5, -130, 0.5, -140),
+                BackgroundTransparency = 0
+            }):Play()
             refreshList()
+        else
+            local tw = CreateTween(configFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                Position = UDim2.new(0.5, -130, 0.5, -150),
+                BackgroundTransparency = 1
+            })
+            tw:Play()
+            tw.Completed:Connect(function()
+                if not PopupObj.IsOpen then
+                    configFrame.Visible = false
+                end
+            end)
         end
     end
 
@@ -873,14 +961,15 @@ local function CreateConfigManagerPopup()
 end
 
 function Library:CreateCategory(categoryName, customPosition)
-    local categoryObj = { Collapsed = false }
+    local categoryObj = { Collapsed = false, Name = tostring(categoryName) }
     local categoryIndex = #Library.Categories
     local defaultPos = customPosition or UDim2.new(0, 25 + (categoryIndex * 195), 0, 55)
 
     categoryObj.DefaultPosition = defaultPos
+    categoryObj.CurrentPosition = defaultPos
 
     local categoryFrame = Instance.new("Frame")
-    categoryFrame.Name = tostring(categoryName) .. "_Category"
+    categoryFrame.Name = categoryObj.Name .. "_Category"
     categoryFrame.Size = UDim2.new(0, 185, 0, 0)
     categoryFrame.AutomaticSize = Enum.AutomaticSize.Y
     categoryFrame.Position = defaultPos
@@ -928,7 +1017,7 @@ function Library:CreateCategory(categoryName, customPosition)
     titleLabel.Size = UDim2.new(1, -48, 1, 0)
     titleLabel.Position = UDim2.new(0, 26, 0, 0)
     titleLabel.BackgroundTransparency = 1
-    titleLabel.Text = tostring(categoryName):upper()
+    titleLabel.Text = categoryObj.Name:upper()
     titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     titleLabel.TextSize = 11
     titleLabel.Font = Enum.Font.GothamBold
@@ -991,7 +1080,9 @@ function Library:CreateCategory(categoryName, customPosition)
         updateCategoryTween()
     end)
 
-    MakeDraggable(categoryFrame, header)
+    MakeDraggable(categoryFrame, header, function(newPos)
+        categoryObj.CurrentPosition = newPos
+    end)
 
     function categoryObj:Section(sData) return categoryObj end
     function categoryObj:SubPage(subData)
@@ -1213,6 +1304,9 @@ function Library:CreateCategory(categoryName, customPosition)
                     Library.Flags[kFlag] = bindObj
                     pcall(kCallback, bindObj)
                 elseif not gpe and currentMode ~= "Always" and (input.KeyCode == currKey or input.UserInputType == currKey) then
+                    if not toggleObj.Enabled then
+                        return
+                    end
                     if currentMode == "Toggle" then
                         fireToggle(not toggleObj.Enabled)
                     elseif currentMode == "Hold" then
@@ -1227,6 +1321,7 @@ function Library:CreateCategory(categoryName, customPosition)
 
             UserInputService.InputEnded:Connect(function(input, gpe)
                 if not gpe and currentMode == "Hold" and (input.KeyCode == currKey or input.UserInputType == currKey) then
+                    if not toggleObj.Enabled then return end
                     fireToggle(false)
                     updateKeybindListEntry()
                 end
@@ -1590,19 +1685,23 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and (input.KeyCode == Library.ToggleKey or input.UserInputType == Library.ToggleKey) then
         Library.Visible = not Library.Visible
         searchBarFrame.Visible = Library.Visible
+
+        if not Library.Visible and ConfigManagerPopupObj and ConfigManagerPopupObj.IsOpen then
+            ConfigManagerPopupObj:ToggleVisible()
+        end
         
         for _, cat in pairs(Library.Categories) do
             if Library.Visible then
                 cat.Frame.Visible = true
-                cat.Frame.Position = cat.DefaultPosition - UDim2.new(0, 0, 0, 25)
+                cat.Frame.Position = cat.CurrentPosition - UDim2.new(0, 0, 0, 25)
                 cat.Frame.BackgroundTransparency = 1
                 CreateTween(cat.Frame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Position = cat.DefaultPosition,
+                    Position = cat.CurrentPosition,
                     BackgroundTransparency = 0
                 }):Play()
             else
                 local tw = CreateTween(cat.Frame, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-                    Position = cat.DefaultPosition - UDim2.new(0, 0, 0, 25),
+                    Position = cat.CurrentPosition - UDim2.new(0, 0, 0, 25),
                     BackgroundTransparency = 1
                 })
                 tw:Play()
