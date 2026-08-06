@@ -189,6 +189,19 @@ function Library:SaveConfig(name)
         for flag, val in pairs(Library.Flags) do
             if typeof(val) == "Color3" then
                 saveData.Flags[flag] = {type = "Color3", r = val.R or 0, g = val.G or 0, b = val.B or 0}
+            elseif typeof(val) == "EnumItem" then
+                saveData.Flags[flag] = {type = "EnumItem", enumType = tostring(val.EnumType), name = val.Name}
+            elseif type(val) == "table" then
+                -- Handle sub-tables like keybind objects safely
+                local tblCopy = {}
+                for subKey, subVal in pairs(val) do
+                    if typeof(subVal) == "EnumItem" then
+                        tblCopy[subKey] = {type = "EnumItem", enumType = tostring(subVal.EnumType), name = subVal.Name}
+                    else
+                        tblCopy[subKey] = subVal
+                    end
+                end
+                saveData.Flags[flag] = tblCopy
             elseif type(val) ~= "function" and type(val) ~= "userdata" then
                 saveData.Flags[flag] = val
             end
@@ -208,6 +221,8 @@ function Library:SaveConfig(name)
     if success and encoded then
         writefile(Library.ConfigFolder .. "/" .. name .. ".json", encoded)
         Library:Notification("Config", "Saved config: " .. name, 2)
+    else
+        Library:Notification("Config", "Failed to save config!", 2)
     end
 end
 
@@ -222,8 +237,27 @@ function Library:LoadConfig(name)
         if success and type(decoded) == "table" then
             local flagsData = decoded.Flags or decoded
             for flag, val in pairs(flagsData) do
-                if type(val) == "table" and val.type == "Color3" then
-                    Library.Flags[flag] = Color3.new(val.r or 1, val.g or 1, val.b or 1)
+                if type(val) == "table" then
+                    if val.type == "Color3" then
+                        Library.Flags[flag] = Color3.new(val.r or 1, val.g or 1, val.b or 1)
+                    elseif val.type == "EnumItem" then
+                        pcall(function()
+                            Library.Flags[flag] = Enum[val.enumType][val.name]
+                        end)
+                    else
+                        -- Reconstruct tables/bindObjects
+                        local reconstructed = {}
+                        for subKey, subVal in pairs(val) do
+                            if type(subVal) == "table" and subVal.type == "EnumItem" then
+                                pcall(function()
+                                    reconstructed[subKey] = Enum[subVal.enumType][subVal.name]
+                                end)
+                            else
+                                reconstructed[subKey] = subVal
+                            end
+                        end
+                        Library.Flags[flag] = reconstructed
+                    end
                 else
                     Library.Flags[flag] = val
                 end
@@ -241,7 +275,11 @@ function Library:LoadConfig(name)
                 end
             end
             Library:Notification("Config", "Loaded config: " .. name, 2)
+        else
+            Library:Notification("Config", "Failed to parse config!", 2)
         end
+    else
+        Library:Notification("Config", "Config file not found!", 2)
     end
 end
 
