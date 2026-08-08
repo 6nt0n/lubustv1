@@ -125,7 +125,7 @@ local function MakeDrag(frame, handle, callback)
         if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
             local delta = input.Position - dragStart
             local target = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-            frame.Position = target
+            T(frame, TweenInfo.new(0.08, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Position = target}):Play()
             if callback then callback(target) end
         end
     end)
@@ -390,7 +390,7 @@ function Library:KeybindList()
 
     local frame = Instance.new("Frame")
     frame.Position = UDim2.new(0, 14, 0, 48)
-    frame.Size = UDim2.new(0, 180, 0, 26)
+    frame.Size = UDim2.new(0, 180, 0, 24)
     frame.BackgroundColor3 = THEME.Background
     frame.BorderSizePixel = 0
     frame.ZIndex = 60
@@ -406,26 +406,17 @@ function Library:KeybindList()
     top.Parent = frame
     RegTheme("Accents", top)
 
-    local header = Instance.new("Frame")
-    header.Size = UDim2.new(1, 0, 0, 22)
-    header.Position = UDim2.new(0, 0, 0, 2)
-    header.BackgroundColor3 = THEME.Inline
-    header.BorderSizePixel = 0
-    header.ZIndex = 61
-    header.Parent = frame
-    AddBorder(header, THEME.Border)
-
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -10, 1, 0)
-    title.Position = UDim2.new(0, 6, 0, 0)
+    title.Size = UDim2.new(1, -12, 0, 22)
+    title.Position = UDim2.new(0, 6, 0, 2)
     title.BackgroundTransparency = 1
     title.Text = "ACTIVE KEYBINDS"
     title.Font = Enum.Font.GothamBold
-    title.TextSize = 9
+    title.TextSize = 10
     title.TextColor3 = THEME.TextActive
     title.TextXAlignment = Enum.TextXAlignment.Left
-    title.ZIndex = 62
-    title.Parent = header
+    title.ZIndex = 61
+    title.Parent = frame
 
     local cont = Instance.new("Frame")
     cont.Size = UDim2.new(1, -12, 0, 0)
@@ -441,7 +432,10 @@ function Library:KeybindList()
 
     layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         cont.Size = UDim2.new(1, -12, 0, layout.AbsoluteContentSize.Y)
-        frame.Size = UDim2.new(0, 180, 0, 32 + layout.AbsoluteContentSize.Y)
+        local newHeight = (layout.AbsoluteContentSize.Y > 0) and (30 + layout.AbsoluteContentSize.Y) or 24
+        T(frame, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 180, 0, newHeight)
+        }):Play()
     end)
 
     function KL:AddOrUpdate(name, keyName, active)
@@ -479,7 +473,9 @@ function Library:KeybindList()
             KL.BindEntries[name] = { Row = row, KeyLabel = kLbl }
         else
             KL.BindEntries[name].KeyLabel.Text = "[" .. tostring(keyName) .. "]"
-            KL.BindEntries[name].KeyLabel.TextColor3 = active and THEME.Accent or THEME.TextInactive
+            T(KL.BindEntries[name].KeyLabel, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {
+                TextColor3 = active and THEME.Accent or THEME.TextInactive
+            }):Play()
         end
     end
 
@@ -679,6 +675,12 @@ local function CreateConfigPopup()
     close.ZIndex = 201
     close.Parent = frame
 
+    close.MouseEnter:Connect(function()
+        T(close, TweenInfo.new(0.15), {TextColor3 = Color3.fromRGB(255, 80, 80)}):Play()
+    end)
+    close.MouseLeave:Connect(function()
+        T(close, TweenInfo.new(0.15), {TextColor3 = THEME.SubText}):Play()
+    end)
     close.MouseButton1Click:Connect(function() Popup:ToggleVisible() end)
 
     local box = Instance.new("TextBox")
@@ -700,7 +702,7 @@ local function CreateConfigPopup()
     scroll.Position = UDim2.new(0, 8, 0, 62)
     scroll.BackgroundColor3 = THEME.Inline
     scroll.BorderSizePixel = 0
-    scroll.ScrollBarThickness = 2
+    scroll.ScrollBarThickness = 0
     scroll.ZIndex = 201
     scroll.Parent = frame
     AddBorder(scroll, THEME.Border)
@@ -711,6 +713,18 @@ local function CreateConfigPopup()
     sLayout.Parent = scroll
 
     local selected = nil
+
+    local function updateSelectionVisuals()
+        for _, c in ipairs(scroll:GetChildren()) do
+            if c:IsA("TextButton") then
+                local isSel = (c.Text:gsub("^%s+", "") == selected)
+                T(c, TweenInfo.new(0.18, Enum.EasingStyle.Quart), {
+                    BackgroundColor3 = isSel and THEME.Element or THEME.Inline,
+                    TextColor3 = isSel and THEME.Accent or THEME.TextInactive
+                }):Play()
+            end
+        end
+    end
 
     local function refresh()
         for _, c in ipairs(scroll:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
@@ -730,10 +744,21 @@ local function CreateConfigPopup()
                     btn.ZIndex = 202
                     btn.Parent = scroll
 
+                    btn.MouseEnter:Connect(function()
+                        if selected ~= name then
+                            T(btn, TweenInfo.new(0.15), {BackgroundColor3 = THEME["Hovered Element"]}):Play()
+                        end
+                    end)
+                    btn.MouseLeave:Connect(function()
+                        if selected ~= name then
+                            T(btn, TweenInfo.new(0.15), {BackgroundColor3 = THEME.Inline}):Play()
+                        end
+                    end)
+
                     btn.MouseButton1Click:Connect(function()
                         selected = name
                         box.Text = name
-                        refresh()
+                        updateSelectionVisuals()
                     end)
                 end
                 scroll.CanvasSize = UDim2.new(0, 0, 0, sLayout.AbsoluteContentSize.Y)
@@ -745,20 +770,46 @@ local function CreateConfigPopup()
         scroll.CanvasSize = UDim2.new(0, 0, 0, sLayout.AbsoluteContentSize.Y)
     end)
 
-    local function makeBtn(txt, parent, xPos, cb)
+    local function makeBtn(txt, parent, xPos, cb, isDelete)
         local b = Instance.new("TextButton")
         b.Size = UDim2.new(0.48, 0, 1, 0)
         b.Position = UDim2.new(xPos, 0, 0, 0)
         b.BackgroundColor3 = THEME.Inline
         b.Text = txt
-        b.TextColor3 = THEME.TextActive
+        b.TextColor3 = isDelete and Color3.fromRGB(225, 75, 75) or THEME.TextActive
         b.Font = Enum.Font.GothamMedium
         b.TextSize = 10
         b.AutoButtonColor = false
         b.ZIndex = 201
         b.Parent = parent
         AddBorder(b, THEME.Border)
-        b.MouseButton1Click:Connect(cb)
+
+        local baseCol = b.TextColor3
+        b.MouseEnter:Connect(function()
+            T(b, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {
+                BackgroundColor3 = THEME["Hovered Element"],
+                TextColor3 = isDelete and Color3.fromRGB(255, 100, 100) or THEME.Accent
+            }):Play()
+        end)
+        b.MouseLeave:Connect(function()
+            T(b, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {
+                BackgroundColor3 = THEME.Inline,
+                TextColor3 = baseCol
+            }):Play()
+        end)
+        b.MouseButton1Click:Connect(function()
+            T(b, TweenInfo.new(0.08, Enum.EasingStyle.Quad), {
+                BackgroundColor3 = THEME.Accent,
+                TextColor3 = Color3.new(1, 1, 1)
+            }):Play()
+            task.delay(0.08, function()
+                T(b, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {
+                    BackgroundColor3 = THEME["Hovered Element"],
+                    TextColor3 = isDelete and Color3.fromRGB(255, 100, 100) or THEME.Accent
+                }):Play()
+            end)
+            pcall(cb)
+        end)
         return b
     end
 
@@ -790,7 +841,7 @@ local function CreateConfigPopup()
         if n ~= "" then Library:SaveConfig(n); refresh() end
     end)
     
-    local del = makeBtn("Delete", row2, 0.52, function()
+    makeBtn("Delete", row2, 0.52, function()
         local n = selected or box.Text
         if n ~= "" and delfile and isfile and isfile(Library.ConfigFolder .. "/" .. n .. ".json") then
             pcall(function() delfile(Library.ConfigFolder .. "/" .. n .. ".json") end)
@@ -798,8 +849,7 @@ local function CreateConfigPopup()
             refresh()
             Library:Notification("Config", "Deleted config: " .. n, 2)
         end
-    end)
-    del.TextColor3 = Color3.fromRGB(225, 75, 75)
+    end, true)
 
     Popup = {}
     Popup.Frame = frame
@@ -901,11 +951,14 @@ function Library:CreateCategory(categoryName, customPos)
     arrow.Font = Enum.Font.GothamBold
     arrow.Parent = header
 
-    local container = Instance.new("Frame")
+    local container = Instance.new("ScrollingFrame")
     container.Name = "Container"
     container.Size = UDim2.new(1, 0, 0, 0)
     container.BackgroundTransparency = 1
     container.ClipsDescendants = true
+    container.ScrollBarThickness = 0
+    container.ScrollingDirection = Enum.ScrollingDirection.Y
+    container.CanvasSize = UDim2.new(0, 0, 0, 0)
     container.LayoutOrder = 2
     container.Parent = frame
     catObj.Container = container
@@ -923,8 +976,23 @@ function Library:CreateCategory(categoryName, customPos)
     cLayout.Parent = container
 
     local function updateTween()
+        local contentHeight = cLayout.AbsoluteContentSize.Y + 11
+        local screenH = ScreenGui.AbsoluteSize.Y
+        if screenH <= 0 then
+            pcall(function() screenH = workspace.CurrentCamera.ViewportSize.Y end)
+        end
+        if screenH <= 0 then screenH = 600 end
+        
+        local yOffset = frame.AbsolutePosition.Y
+        if yOffset <= 0 then yOffset = catObj.CurrentPosition.Y.Offset end
+        local maxScreenHeight = math.max(180, screenH - yOffset - 35)
+        
         local h = 0
-        if not catObj.Collapsed then h = cLayout.AbsoluteContentSize.Y + 11 end
+        if not catObj.Collapsed then
+            h = math.min(contentHeight, maxScreenHeight)
+        end
+        
+        container.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
         T(container, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Size = UDim2.new(1, 0, 0, h) }):Play()
         T(arrow, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Rotation = catObj.Collapsed and -90 or 0 }):Play()
     end
@@ -938,7 +1006,10 @@ function Library:CreateCategory(categoryName, customPos)
         updateTween()
     end)
 
-    MakeDrag(frame, header, function(pos) catObj.CurrentPosition = pos end)
+    MakeDrag(frame, header, function(pos)
+        catObj.CurrentPosition = pos
+        updateTween()
+    end)
 
     function catObj:Section(d) return catObj end
     function catObj:SubPage(d)
