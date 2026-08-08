@@ -892,17 +892,12 @@ function Library:CreateCategory(categoryName, customPos)
 
     local frame = Instance.new("Frame")
     frame.Name = catObj.Name .. "_Category"
-    frame.Size = UDim2.new(0, 180, 0, 0)
-    frame.AutomaticSize = Enum.AutomaticSize.Y
+    frame.Size = UDim2.new(0, 180, 0, 32)
     frame.Position = defPos
     frame.BackgroundColor3 = THEME.Background
     frame.BorderSizePixel = 0
     frame.Parent = ScreenGui
     AddBorder(frame, THEME.Outline)
-
-    local mainLayout = Instance.new("UIListLayout")
-    mainLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    mainLayout.Parent = frame
 
     local header = Instance.new("TextButton")
     header.Name = "Header"
@@ -910,7 +905,7 @@ function Library:CreateCategory(categoryName, customPos)
     header.BackgroundColor3 = Color3.new(1,1,1)
     header.AutoButtonColor = false
     header.Text = ""
-    header.LayoutOrder = 1
+    header.ZIndex = 10
     header.Parent = frame
 
     local grad = Instance.new("UIGradient")
@@ -928,6 +923,7 @@ function Library:CreateCategory(categoryName, customPos)
     dot.TextColor3 = Color3.new(1,1,1)
     dot.TextSize = 14
     dot.Font = Enum.Font.GothamBold
+    dot.ZIndex = 11
     dot.Parent = header
 
     local title = Instance.new("TextLabel")
@@ -939,6 +935,7 @@ function Library:CreateCategory(categoryName, customPos)
     title.TextSize = 10
     title.Font = Enum.Font.GothamBold
     title.TextXAlignment = Enum.TextXAlignment.Left
+    title.ZIndex = 11
     title.Parent = header
 
     local arrow = Instance.new("TextLabel")
@@ -949,17 +946,18 @@ function Library:CreateCategory(categoryName, customPos)
     arrow.TextColor3 = Color3.fromRGB(220, 220, 220)
     arrow.TextSize = 9
     arrow.Font = Enum.Font.GothamBold
+    arrow.ZIndex = 11
     arrow.Parent = header
 
     local container = Instance.new("ScrollingFrame")
     container.Name = "Container"
     container.Size = UDim2.new(1, 0, 0, 0)
+    container.Position = UDim2.new(0, 0, 0, 32)
     container.BackgroundTransparency = 1
     container.ClipsDescendants = true
     container.ScrollBarThickness = 0
     container.ScrollingDirection = Enum.ScrollingDirection.Y
     container.CanvasSize = UDim2.new(0, 0, 0, 0)
-    container.LayoutOrder = 2
     container.Parent = frame
     catObj.Container = container
 
@@ -994,6 +992,7 @@ function Library:CreateCategory(categoryName, customPos)
         
         container.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
         T(container, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Size = UDim2.new(1, 0, 0, h) }):Play()
+        T(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Size = UDim2.new(0, 180, 0, 32 + h) }):Play()
         T(arrow, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Rotation = catObj.Collapsed and -90 or 0 }):Play()
     end
 
@@ -1116,6 +1115,7 @@ function Library:CreateCategory(categoryName, customPos)
             local h = 28
             if expanded and gear.Visible then h = 32 + sLayout.AbsoluteContentSize.Y end
             T(tFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quart), { Size = UDim2.new(1, 0, 0, h) }):Play()
+            task.delay(0.05, updateTween)
         end
 
         sLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -1429,6 +1429,7 @@ function Library:CreateCategory(categoryName, customPos)
             if expanded then h = 28 + lLayout.AbsoluteContentSize.Y end
             T(dFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quart), { Size = UDim2.new(1, 0, 0, h) }):Play()
             T(dArrow, TweenInfo.new(0.18), { Rotation = expanded and 180 or 0 }):Play()
+            task.delay(0.05, updateTween)
         end
 
         lLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
